@@ -1,0 +1,211 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css" />
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css"> -->
+
+  <style>
+    html, body, #map {
+      height: 100%;
+      width: 100%;
+      /*position: relative;*/
+    }
+    body {
+      padding: 0;
+      margin: 0;
+    }
+    .info {
+      padding: 6px 8px;
+      font: 12px/14px Arial, Helvetica, sans-serif;
+      background: white;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      border-radius: 5px;
+    }
+		.mapkey {
+			height:160px;
+		}
+    .leaflet-control-attribution a {
+			color: #6d6e70 !important;
+			cursor: pointer;
+		}
+  </style>
+
+</head>
+<body>
+
+	<div id="info-modal" class="modal fade" tabindex="-1" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4>Disclaimer</h4>
+      </div>
+      <div class="modal-body">
+				<h4>The maps used do not imply the expression of any opinion concerning the legal status of a territory or of its authorities.</h4>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+	<div id="map"></div>
+
+<script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script type="text/javascript" src="js/tabletop.js"></script> <!-- https://github.com/jsoma/tabletop -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script>
+
+
+var appData = {};
+
+function formatNumber(x) {
+    return x.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+var map = L.map('map').setView([0, 0], 2);
+map.fitWorld();
+map.fitBounds([
+  [-50, 130],
+  [60, -110]
+]);
+
+var info = L.control();
+
+L.tileLayer('http://{s}.tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors | ' + '<a class="dislaimer" onclick="$(' + "'#info-modal'" + ').modal();"><span class="glyphicon glyphicon-info-sign"></span> disclaimer</a>'
+  }).addTo(map);
+
+function style(feature) {
+    return {
+        fillColor: countryFill(feature.properties),
+				fillOpacity: 0.7,
+				weight: 1,
+				opacity: 1,
+				color: 'white'
+    };
+}
+function highlightFeature(e) {
+    var layer = e.target;
+    layer.setStyle({
+        weight: 3,
+        color: '#666',
+        fillOpacity: 0.9
+    });
+    if (!L.Browser.ie && !L.Browser.opera) { layer.bringToFront(); }
+		info.update(layer.feature.properties);
+}
+function resetHighlight(e) {
+	countries.resetStyle(e.target);
+	info.update();
+}
+function zoomToFeature(e) {
+    map.fitBounds(e.target.getBounds());
+}
+function onEachFeature(feature, layer) {
+    layer.on({
+        mouseover: highlightFeature,
+        mouseout: resetHighlight,
+        click: zoomToFeature
+    });
+}
+
+function countryFill(properties){
+	if(properties['universal_app_program'] === "TRUE" && properties['pillowcase_project'] === "TRUE" && properties['research'] === "TRUE" ){
+		return "#a06338";
+	} else if (properties['universal_app_program'] === "TRUE" && properties['pillowcase_project'] === "TRUE") {
+		return "#8b51a1";
+	} else if (properties['universal_app_program'] === "TRUE" && properties['research'] === "TRUE") {
+		return "#f8981d";
+	} else if (properties['pillowcase_project'] === "TRUE" && properties['research'] === "TRUE") {
+		return "#33a248";
+	} else if(properties['universal_app_program'] === "TRUE" ){
+		return "#f05243";
+	} else if(properties['pillowcase_project'] === "TRUE"){
+		return "#3b7cb8";
+	} else if(properties['research'] === "TRUE"){
+		return "#fed131";
+	} else {
+		return '#9f9fa3';
+	}
+}
+
+function grabAppData(){
+  var public_spreadsheet_url = 'https://docs.google.com/spreadsheets/d/1-ZdUK0ZYRj7wp6yOLGVFK8csuxmUYsWYkt4vkeU2OHQ/pubhtml';
+  function grabInfo(data, tabletop) {
+		$.each(data, function(i,d){
+			appData[d.iso] = d;
+		});
+    grabGeoData();
+  }
+  Tabletop.init( { key: public_spreadsheet_url,
+                     callback: grabInfo,
+                     simpleSheet: true } )
+}
+
+function grabGeoData(){
+  $.getJSON('data/world.geojson', function(data) {
+    mapData = data;
+    $.each(mapData.features, function(i,d){
+      var countryData = appData[d.properties.iso];
+      d.properties['status'] = countryData['status'];
+      d.properties['fa_downloads'] = countryData['fa_downloads'];
+      d.properties['hz_downloads'] = countryData['hz_downloads'];
+			d.properties['universal_app_program'] = countryData['universal_app_program'];
+			d.properties['pillowcase_project'] = countryData['pillowcase_project'];
+			d.properties['research'] = countryData['research'];
+    });
+    countries = L.geoJson(mapData, {style: style, onEachFeature: onEachFeature}).addTo(map);
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'info legend');
+        div.innerHTML += '<img class="mapkey" src="data/mapkey.png" alt="legend key">';
+        return div;
+    };
+    legend.addTo(map);
+
+		info.onAdd = function (map) {
+		    this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
+		    this.update();
+		    return this._div;
+		};
+		// method that we will use to update the control based on feature properties passed
+		info.update = function (props) {
+				infoHtml = '<h5>GDPC Activities</h5>';
+				if(props){
+					infoHtml += '<b>' + props.name + '</b><br>';
+					var activitiesArray = [];
+					if(props['universal_app_program'] === "TRUE"){ activitiesArray.push("Universal App Program"); }
+					if(props['pillowcase_project'] === "TRUE"){ activitiesArray.push("Pillowcase Project"); }
+					if(props['research'] === "TRUE"){ activitiesArray.push("Research"); }
+
+					if(activitiesArray.length > 0){
+						infoHtml += "<div>" + activitiesArray.join(', ') + "</div>";
+					} else if (props.status === 'Interest') {
+						infoHtml += "<div>Interest only</div>";
+					} else {
+						infoHtml += "<div>No data</div>";
+					}
+				} else {
+					infoHtml += 'Hover over a country';
+				}
+		    this._div.innerHTML = infoHtml;
+		};
+		info.addTo(map);
+  });
+}
+
+grabAppData();
+
+</script>
+</body>
+</html>
